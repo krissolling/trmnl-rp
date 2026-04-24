@@ -104,7 +104,11 @@ async function getFileVersions(token, fileKey, lastModified) {
           created_at: v.created_at,
           label: v.label || ''
         })),
-        has_more: Boolean(resp.pagination?.next_page || resp.pagination?.prev_page)
+        // Figma: prev_page is the URL for OLDER versions, next_page is NEWER.
+        // A file's version history fits on one page iff prev_page is absent
+        // (we always request the most-recent page first, so next_page is
+        // naturally absent). Treat that as "we've seen all versions".
+        has_older_versions: Boolean(resp.pagination?.prev_page)
       };
     }
   );
@@ -153,7 +157,7 @@ export async function fetchTwoWeeksData(token, teamId, thisStart, thisEnd, lastS
   //    L2 versions cache auto-invalidates on last_modified change → repeat polls
   //    usually only hit the network for files edited since the last poll.
   const perFile = await mapPool(touched, 4, async (f) => {
-    const [{ versions, has_more }, comments] = await Promise.all([
+    const [{ versions, has_older_versions }, comments] = await Promise.all([
       getFileVersions(token, f.key, f.last_modified),
       getFileComments(token, f.key)
     ]);
@@ -167,11 +171,12 @@ export async function fetchTwoWeeksData(token, teamId, thisStart, thisEnd, lastS
     const commThis = count(comments, (c) => c.created_at, thisStart, thisEnd);
     const commLast = count(comments, (c) => c.created_at, lastStart, lastEnd);
 
-    // New-file heuristic: if we have the whole version history in one page and
-    // the earliest version falls inside the window, call it new.
+    // New-file heuristic: we have the whole version history (no older pages)
+    // AND the earliest known version is inside the window.
     const earliest = versions[versions.length - 1];
-    const isNewThis = !has_more && earliest && tsInRange(earliest.created_at, thisStart, thisEnd);
-    const isNewLast = !has_more && earliest && tsInRange(earliest.created_at, lastStart, lastEnd);
+    const sawAllHistory = !has_older_versions && earliest;
+    const isNewThis = sawAllHistory && tsInRange(earliest.created_at, thisStart, thisEnd);
+    const isNewLast = sawAllHistory && tsInRange(earliest.created_at, lastStart, lastEnd);
 
     return {
       project_id: f.project_id,
