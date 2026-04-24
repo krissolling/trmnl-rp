@@ -99,8 +99,8 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Static files (fonts, etc.)
-  if (req.method === 'GET' && await serveStatic(req, res)) return;
+  // Static files (fonts, etc.) — accept GET and HEAD
+  if ((req.method === 'GET' || req.method === 'HEAD') && await serveStatic(req, res)) return;
 
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not found');
