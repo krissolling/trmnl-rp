@@ -1,0 +1,12 @@
+{
+  "name": "figma-week-api",
+  "version": "0.1.0",
+  "description": "Backend for the Figma Week TRMNL plugin — aggregates weekly Figma activity for Regular Practice.",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  }
+}

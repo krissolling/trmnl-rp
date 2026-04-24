@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRMNL · Figma Week · Playground</title>
+<style>
+  :root {
+    --paper: #f3f1ec;
+    --ink: #1a1a1a;
+    --muted: #6b6862;
+    --rule: #d9d5cc;
+    --device-bezel: #b4afa4;
+    --accent: #111;
+    --ui-sans: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ui-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--ui-sans); }
+  body { padding: 48px 56px 96px; min-width: 960px; }
+
+  /* ---------- Page chrome ---------- */
+  .page-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  .page-title { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; font-family: var(--ui-mono); color: var(--muted); }
+  .page-title strong { color: var(--ink); font-weight: 600; }
+  .page-sub { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-family: var(--ui-mono); color: var(--muted); }
+
+  .controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 12px 16px; background: #fff; border: 1px solid var(--rule);
+    border-radius: 2px; margin-bottom: 40px; position: sticky; top: 16px; z-index: 20;
+  }
+  .ctrl-group { display: flex; gap: 4px; align-items: center; }
+  .ctrl-label {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: var(--ui-mono); color: var(--muted); margin-right: 8px;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--ink); border-radius: 2px; overflow: hidden; }
+  .seg button {
+    all: unset; padding: 7px 12px; font-family: var(--ui-mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; background: #fff; color: var(--ink);
+    border-right: 1px solid var(--ink);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .seg button:hover:not(.on) { background: var(--paper); }
+
+  /* ---------- Device canvases ---------- */
+  .board { display: grid; gap: 56px; }
+  .slot { display: grid; grid-template-columns: auto 1fr; gap: 32px; align-items: start; }
+  .slot-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .slot-name {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: var(--ui-mono); color: var(--ink);
+  }
+  .slot-dim {
+    font-size: 11px; letter-spacing: 0.08em; font-family: var(--ui-mono); color: var(--muted);
+  }
+  .slot-notes { max-width: 280px; }
+  .slot-notes p {
+    font-size: 12px; line-height: 1.5; color: var(--muted); font-family: var(--ui-mono); margin: 0 0 8px;
+  }
+  .slot-notes strong { color: var(--ink); font-weight: 500; }
+  .slot-notes .tag {
+    display: inline-block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-family: var(--ui-mono); padding: 2px 6px; border: 1px solid var(--rule); border-radius: 2px;
+    margin-right: 4px; margin-bottom: 4px; color: var(--muted);
+  }
+
+  .row-wide { display: grid; grid-template-columns: 1fr; }
+  .row-split { display: grid; grid-template-columns: auto auto 1fr; gap: 48px; align-items: start; }
+
+  /* The device canvas itself */
+  .device {
+    position: relative; background: #fff; color: #000;
+    border: 1px dashed var(--device-bezel); padding: 0;
+    /* turn off any subpixel/AA for text where possible */
+    -webkit-font-smoothing: none;
+    image-rendering: pixelated;
+    font-family: var(--ui-sans);
+  }
+  .device.full { width: 800px; height: 480px; }
+  .device.halfH { width: 800px; height: 240px; }
+  .device.halfV { width: 400px; height: 480px; }
+  .device.quad  { width: 400px; height: 240px; }
+
+  .device-inner {
+    position: absolute; inset: 0 0 38px 0;
+    display: flex; flex-direction: column;
+  }
+  .device.halfH .device-inner,
+  .device.quad .device-inner { inset: 0 0 30px 0; }
+
+  /* Title bar at bottom of every device */
+  .titlebar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 38px; border-top: 1px solid #000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; font-family: var(--ui-mono);
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .device.halfH .titlebar,
+  .device.quad .titlebar { height: 30px; font-size: 10px; padding: 0 12px; }
+  .titlebar .tb-left { display: flex; align-items: center; gap: 10px; }
+  .titlebar .tb-dot { width: 6px; height: 6px; background: #000; display: inline-block; }
+  .titlebar .tb-right { display: flex; align-items: center; gap: 10px; }
+  .titlebar .tb-icon { font-family: var(--ui-mono); letter-spacing: 0; }
+
+  /* Grid overlay */
+  .device.grid-on .device-inner::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.35;
+    background-image:
+      linear-gradient(to right, #000 1px, transparent 1px),
+      linear-gradient(to bottom, #000 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ---------- FULL layout ---------- */
+  .full-body {
+    flex: 1; display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: 1fr auto;
+    padding: 28px 32px 20px; gap: 0;
+  }
+  .full-hero { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; }
+  .full-side { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 22px; padding-left: 28px; border-left: 1px solid #000; }
+  .full-foot { grid-column: 1 / -1; grid-row: 2; display: flex; justify-content: space-between; align-items: flex-end; padding-top: 18px; border-top: 1px solid #000; margin-top: 14px; }
+
+  .hero-num {
+    font-size: 200px; line-height: 0.88; font-weight: 900;
+    letter-spacing: -0.04em; font-family: var(--ui-sans);
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-label {
+    font-family: var(--ui-mono); font-size: 13px; letter-spacing: 0.18em;
+    text-transform: uppercase; margin-top: 12px;
+  }
+  .hero-trend {
+    font-family: var(--ui-mono); font-size: 12px; letter-spacing: 0.1em;
+    margin-top: 6px; color: #000;
+  }
+
+  .stat {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .stat-num {
+    font-size: 52px; line-height: 0.92; font-weight: 800; letter-spacing: -0.02em;
+    font-family: var(--ui-sans); font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-family: var(--ui-mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; margin-top: 4px;
+  }
+  .stat-trend {
+    font-family: var(--ui-mono); font-size: 10px; letter-spacing: 0.08em;
+    color: #000; margin-top: 2px;
+  }
+
+  .comments-ratio { display: flex; align-items: baseline; gap: 10px; }
+  .comments-num {
+    font-family: var(--ui-sans); font-size: 34px; font-weight: 800;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .comments-slash { font-family: var(--ui-sans); font-size: 34px; font-weight: 300; color: #000; }
+  .comments-label {
+    font-family: var(--ui-mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; margin-left: 8px;
+  }
+
+  .alert {
+    font-family: var(--ui-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 8px; border: 1px solid #000;
+  }
+  .alert-dot { width: 8px; height: 8px; background: #000; display: inline-block; }
+
+  .week-range {
+    font-family: var(--ui-mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #000;
+  }
+
+  /* ---------- HALF_HORIZONTAL ---------- */
+  .halfH-body {
+    flex: 1; display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 18px 24px; gap: 24px; align-items: center;
+  }
+  .halfH-hero { display: flex; flex-direction: column; }
+  .halfH-hero .hero-num { font-size: 132px; line-height: 0.85; }
+  .halfH-hero .hero-label { font-size: 11px; margin-top: 6px; }
+  .halfH-hero .hero-trend { font-size: 10px; margin-top: 2px; }
+  .halfH-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding-left: 20px; border-left: 1px solid #000; }
+  .halfH-stats .stat-num { font-size: 34px; }
+  .halfH-stats .stat-label { font-size: 9px; margin-top: 3px; }
+  .halfH-stats .stat-trend { font-size: 9px; }
+  .halfH-body .comments-row {
+    grid-column: 1 / -1; display: flex; justify-content: space-between;
+    align-items: center; padding-top: 10px; margin-top: 6px;
+    border-top: 1px dashed #000;
+  }
+  .halfH-body .comments-num { font-size: 22px; }
+  .halfH-body .comments-slash { font-size: 22px; }
+  .halfH-body .comments-label { font-size: 9px; }
+
+  /* ---------- HALF_VERTICAL ---------- */
+  .halfV-body {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 22px 22px 16px;
+  }
+  .halfV-hero { padding-bottom: 18px; border-bottom: 1px solid #000; }
+  .halfV-hero .hero-num { font-size: 150px; line-height: 0.88; }
+  .halfV-hero .hero-label { font-size: 11px; }
+  .halfV-hero .hero-trend { font-size: 11px; }
+  .halfV-stats { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; flex: 1; }
+  .halfV-stats .stat-num { font-size: 36px; }
+  .halfV-stats .stat-label { font-size: 10px; }
+  .halfV-stats .stat-trend { font-size: 10px; }
+  .halfV-foot {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding-top: 10px; border-top: 1px dashed #000; margin-top: auto;
+  }
+  .halfV-foot .comments-num { font-size: 22px; }
+  .halfV-foot .comments-slash { font-size: 22px; }
+  .halfV-foot .comments-label { font-size: 9px; }
+
+  /* ---------- QUADRANT ---------- */
+  .quad-body {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    padding: 14px 16px; gap: 10px; align-items: center;
+  }
+  .quad-hero .hero-num { font-size: 86px; line-height: 0.9; }
+  .quad-hero .hero-label { font-size: 9px; letter-spacing: 0.14em; margin-top: 4px; }
+  .quad-hero .hero-trend { font-size: 9px; margin-top: 2px; }
+  .quad-side { padding-left: 14px; border-left: 1px solid #000; }
+  .quad-side .stat-num { font-size: 44px; }
+  .quad-side .stat-label { font-size: 9px; margin-top: 3px; }
+  .quad-side .stat-trend { font-size: 9px; }
+
+  /* ---------- Empty state ---------- */
+  .empty {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 24px;
+  }
+  .empty-title {
+    font-size: 44px; font-weight: 900; letter-spacing: -0.02em; font-family: var(--ui-sans);
+    margin-bottom: 12px;
+  }
+  .empty-sub {
+    font-family: var(--ui-mono); font-size: 12px; letter-spacing: 0.06em;
+    max-width: 420px; line-height: 1.55; color: #000;
+  }
+  .empty-cta {
+    margin-top: 20px; font-family: var(--ui-mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; padding: 8px 14px; border: 1px solid #000;
+  }
+  .halfH .empty-title, .quad .empty-title { font-size: 26px; margin-bottom: 6px; }
+  .halfH .empty-sub, .quad .empty-sub { font-size: 10px; }
+  .quad .empty-cta { font-size: 9px; padding: 6px 10px; margin-top: 10px; }
+  .halfV .empty-title { font-size: 32px; }
+  .halfV .empty-sub { font-size: 11px; }
+
+  /* ---------- Prompt output ---------- */
+  .prompt-box {
+    margin-top: 56px; background: #fff; border: 1px solid var(--rule);
+    border-radius: 2px; padding: 20px 24px;
+  }
+  .prompt-head {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .prompt-title {
+    font-family: var(--ui-mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .prompt-body {
+    font-family: var(--ui-mono); font-size: 13px; line-height: 1.6; color: var(--ink);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .copy-btn {
+    all: unset; padding: 6px 12px; border: 1px solid var(--ink);
+    font-family: var(--ui-mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; cursor: pointer; background: #fff; color: var(--ink);
+  }
+  .copy-btn:hover { background: var(--ink); color: #fff; }
+  .copy-btn.copied { background: var(--ink); color: #fff; }
+
+  /* ---------- small helpers ---------- */
+  .row-label {
+    font-family: var(--ui-mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin: 32px 0 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="page-title"><strong>TRMNL</strong> &nbsp;/&nbsp; Figma Week &nbsp;/&nbsp; Layout preview</div>
+  <div class="page-sub">Regular Practice · Mockup v0.1</div>
+</div>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">State</span>
+    <div class="seg" id="stateSeg">
+      <button data-v="data" class="on">With data</button>
+      <button data-v="empty">Empty / first-run</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">View</span>
+    <div class="seg" id="weekSeg">
+      <button data-v="tue" class="on">Tue · live</button>
+      <button data-v="wed">Wed · live</button>
+      <button data-v="thu">Thu · live</button>
+      <button data-v="retro">Last wk</button>
+      <button data-v="rolling">Rolling 7d</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Grid overlay</span>
+    <div class="seg" id="gridSeg">
+      <button data-v="off" class="on">Off</button>
+      <button data-v="on">On</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FULL ============ -->
+<div class="row-label">01 &nbsp;—&nbsp; Full (800 × 480)</div>
+<div class="slot">
+  <div>
+    <div class="slot-header">
+      <span class="slot-name">FULL</span>
+      <span class="slot-dim">800 × 480 px</span>
+    </div>
+    <div class="device full" id="dev-full">
+      <div class="device-inner" id="full-content"></div>
+      <div class="titlebar">
+        <div class="tb-left"><span class="tb-dot"></span> FIGMA WEEK</div>
+        <div class="tb-right"><span class="tb-icon">REGULAR PRACTICE</span> · <span class="tb-icon">▮▮▮</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="slot-notes">
+    <p><strong>Hero layout.</strong> Projects touched is the headline everyone sees from across the room.</p>
+    <p>Live views show a 5-dot progress pip (M T W T F) under the hero so partiality is legible. Reference number = <strong>last week total</strong>, not a 4-week average — partial-vs-full comparison would read as "behind" every day.</p>
+    <p>Comments demoted to a small footer line (count only — team uses comments as threads, not tasks). No stale-threads alert.</p>
+    <p><span class="tag">projects</span><span class="tag">files</span><span class="tag">new</span><span class="tag">versions</span><span class="tag">comments (minor)</span><span class="tag">progress pip</span></p>
+  </div>
+</div>
+
+<!-- ============ HALF_HORIZONTAL ============ -->
+<div class="row-label">02 &nbsp;—&nbsp; Half horizontal (800 × 240)</div>
+<div class="slot">
+  <div>
+    <div class="slot-header">
+      <span class="slot-name">HALF_HORIZONTAL</span>
+      <span class="slot-dim">800 × 240 px</span>
+    </div>
+    <div class="device halfH" id="dev-halfH">
+      <div class="device-inner" id="halfH-content"></div>
+      <div class="titlebar">
+        <div class="tb-left"><span class="tb-dot"></span> FIGMA WEEK</div>
+        <div class="tb-right"><span class="tb-icon">REGULAR PRACTICE</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="slot-notes">
+    <p><strong>Sharing top or bottom half</strong> with another plugin. Keeps the hero number commanding, shrinks the supporting stats to a 3-column strip.</p>
+    <p>Progress pip moves into the footer beside the week range. Stale-threads alert dropped — not enough vertical room.</p>
+    <p><span class="tag">projects</span><span class="tag">files</span><span class="tag">new</span><span class="tag">versions</span><span class="tag">comments (minor)</span><span class="tag">progress pip</span></p>
+  </div>
+</div>
+
+<!-- ============ HALF_VERTICAL + QUADRANT ============ -->
+<div class="row-label">03 &nbsp;—&nbsp; Half vertical &amp; Quadrant</div>
+<div class="row-split">
+  <div>
+    <div class="slot-header">
+      <span class="slot-name">HALF_VERTICAL</span>
+      <span class="slot-dim">400 × 480 px</span>
+    </div>
+    <div class="device halfV" id="dev-halfV">
+      <div class="device-inner" id="halfV-content"></div>
+      <div class="titlebar">
+        <div class="tb-left"><span class="tb-dot"></span> FIGMA</div>
+        <div class="tb-right"><span class="tb-icon">RP</span></div>
+      </div>
+    </div>
+    <div class="slot-notes" style="margin-top: 14px;">
+      <p><strong>Narrow column.</strong> Projects up top, three stacked stats below (files, versions, comments).</p>
+      <p>New files dropped — redundant against files in tight space.</p>
+    </div>
+  </div>
+  <div>
+    <div class="slot-header">
+      <span class="slot-name">QUADRANT</span>
+      <span class="slot-dim">400 × 240 px</span>
+    </div>
+    <div class="device quad" id="dev-quad">
+      <div class="device-inner" id="quad-content"></div>
+      <div class="titlebar">
+        <div class="tb-left"><span class="tb-dot"></span> FIGMA</div>
+        <div class="tb-right"><span class="tb-icon">RP</span></div>
+      </div>
+    </div>
+    <div class="slot-notes" style="margin-top: 14px;">
+      <p><strong>Ambient tile.</strong> Only two numbers survive: projects (hero) and files (supporting).</p>
+      <p>Everything else dropped — legibility &gt; completeness at this size.</p>
+    </div>
+  </div>
+  <div></div>
+</div>
+
+<!-- ============ Prompt ============ -->
+<div class="prompt-box">
+  <div class="prompt-head">
+    <div class="prompt-title">Implementation brief</div>
+    <button class="copy-btn" id="copyBtn">Copy prompt</button>
+  </div>
+  <div class="prompt-body" id="promptBody"></div>
+</div>
+
+<script>
+// ----- state -----
+const state = {
+  mode: 'data',   // 'data' | 'empty'
+  week: 'tue',    // 'tue' | 'wed' | 'thu' | 'retro' | 'rolling'
+  grid: false
+};
+
+// Live = this-week-to-date through that day. Reference = last week's final total.
+// Retro = last completed week. Rolling = trailing 7d. Reference = 4-week rolling avg.
+const views = {
+  tue: {
+    label: 'Tue 21 Apr · week in progress',
+    short: 'Tue',
+    progress: 1,   // days complete of 5
+    refKind: 'lastwk',
+    cur: { projects: 3, files: 9,  newFiles: 2, versions: 4,  resolved: 8,  posted: 15, stale: 5 },
+    ref: { projects: 7, files: 34, newFiles: 9, versions: 21, resolved: 47, posted: 63 }
+  },
+  wed: {
+    label: 'Wed 22 Apr · week in progress',
+    short: 'Wed',
+    progress: 2,
+    refKind: 'lastwk',
+    cur: { projects: 5, files: 19, newFiles: 5, versions: 11, resolved: 22, posted: 34, stale: 5 },
+    ref: { projects: 7, files: 34, newFiles: 9, versions: 21, resolved: 47, posted: 63 }
+  },
+  thu: {
+    label: 'Thu 23 Apr · week in progress',
+    short: 'Thu',
+    progress: 3,
+    refKind: 'lastwk',
+    cur: { projects: 7, files: 29, newFiles: 8, versions: 18, resolved: 38, posted: 54, stale: 4 },
+    ref: { projects: 7, files: 34, newFiles: 9, versions: 21, resolved: 47, posted: 63 }
+  },
+  retro: {
+    label: 'Apr 13 – 19 · final',
+    short: 'Last',
+    progress: 5,
+    refKind: 'avg',
+    cur: { projects: 7, files: 34, newFiles: 9, versions: 21, resolved: 47, posted: 63, stale: 4 },
+    ref: { projects: 5, files: 28, newFiles: 6, versions: 24, resolved: 41, posted: 48 }
+  },
+  rolling: {
+    label: 'Rolling 7 days · ends Tue',
+    short: 'R7',
+    progress: 5,
+    refKind: 'avg',
+    cur: { projects: 6, files: 31, newFiles: 7, versions: 19, resolved: 42, posted: 58, stale: 4 },
+    ref: { projects: 5, files: 28, newFiles: 6, versions: 24, resolved: 41, posted: 48 }
+  }
+};
+
+// Produces the small reference line under each number.
+// Live views compare to last week total (no arrow — partial week can't be judged fairly).
+// Retro / rolling compare to 4-week rolling avg with directional arrow.
+function refLine(cur, view, metric) {
+  const r = view.ref[metric];
+  if (view.refKind === 'lastwk') {
+    return `last wk · ${r}`;
+  }
+  const arrow = cur > r ? '↑' : cur < r ? '↓' : '=';
+  return `${arrow} from ${r} · 4w avg`;
+}
+
+// 5-dot progress pip (M T W T F) for live views
+function progressPip(view) {
+  if (view.refKind !== 'lastwk') return '';
+  let dots = '';
+  for (let i = 0; i < 5; i++) {
+    dots += i < view.progress
+      ? '<span style="display:inline-block;width:6px;height:6px;background:#000;margin-right:3px;"></span>'
+      : '<span style="display:inline-block;width:6px;height:6px;border:1px solid #000;margin-right:3px;box-sizing:border-box;"></span>';
+  }
+  return `<span style="font-family:var(--ui-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px;">${dots} <span>${view.short} of M T W T F</span></span>`;
+}
+
+// ----- renderers -----
+function renderFull() {
+  const el = document.getElementById('full-content');
+  if (state.mode === 'empty') {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-title">Connect Figma</div>
+        <div class="empty-sub">Add your Figma personal access token in plugin settings to surface your team's weekly activity. You'll see projects touched, files modified, named versions saved, and comment velocity here.</div>
+        <div class="empty-cta">Plugin settings →</div>
+      </div>`;
+    return;
+  }
+  const v = views[state.week];
+  const c = v.cur;
+  el.innerHTML = `
+    <div class="full-body">
+      <div class="full-hero">
+        <div class="hero-num">${c.projects}</div>
+        <div class="hero-label">Projects touched</div>
+        <div class="hero-trend">${refLine(c.projects, v, 'projects')}</div>
+        ${v.refKind === 'lastwk' ? `<div style="margin-top:14px;">${progressPip(v)}</div>` : ''}
+      </div>
+      <div class="full-side">
+        <div class="stat">
+          <div class="stat-num">${c.files}</div>
+          <div class="stat-label">Files touched</div>
+          <div class="stat-trend">${refLine(c.files, v, 'files')}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">${c.newFiles}</div>
+          <div class="stat-label">New files</div>
+          <div class="stat-trend">${refLine(c.newFiles, v, 'newFiles')}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">${c.versions}</div>
+          <div class="stat-label">Named versions</div>
+          <div class="stat-trend">${refLine(c.versions, v, 'versions')}</div>
+        </div>
+      </div>
+      <div class="full-foot">
+        <div style="font-family:var(--ui-mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase;">
+          ${c.posted} comments ${v.refKind === 'lastwk' ? `· last wk ${v.ref.posted}` : ''}
+        </div>
+        <div class="week-range">${v.label}</div>
+      </div>
+    </div>`;
+}
+
+function renderHalfH() {
+  const el = document.getElementById('halfH-content');
+  if (state.mode === 'empty') {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-title">Connect Figma</div>
+        <div class="empty-sub">Add token in plugin settings to show weekly activity.</div>
+      </div>`;
+    return;
+  }
+  const v = views[state.week];
+  const c = v.cur;
+  el.innerHTML = `
+    <div class="halfH-body">
+      <div class="halfH-hero">
+        <div class="hero-num">${c.projects}</div>
+        <div class="hero-label">Projects touched</div>
+        <div class="hero-trend">${refLine(c.projects, v, 'projects')}</div>
+      </div>
+      <div class="halfH-stats">
+        <div class="stat">
+          <div class="stat-num">${c.files}</div>
+          <div class="stat-label">Files</div>
+          <div class="stat-trend">${refLine(c.files, v, 'files')}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">${c.newFiles}</div>
+          <div class="stat-label">New</div>
+          <div class="stat-trend">${refLine(c.newFiles, v, 'newFiles')}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">${c.versions}</div>
+          <div class="stat-label">Versions</div>
+          <div class="stat-trend">${refLine(c.versions, v, 'versions')}</div>
+        </div>
+      </div>
+      <div class="comments-row">
+        <div style="font-family:var(--ui-mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase;">
+          ${c.posted} comments ${v.refKind === 'lastwk' ? `· last wk ${v.ref.posted}` : ''}
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          ${v.refKind === 'lastwk' ? progressPip(v) : ''}
+          <div class="week-range" style="font-size:9px;">${v.label}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderHalfV() {
+  const el = document.getElementById('halfV-content');
+  if (state.mode === 'empty') {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-title">Connect Figma</div>
+        <div class="empty-sub">Add token in plugin settings.</div>
+        <div class="empty-cta">Settings →</div>
+      </div>`;
+    return;
+  }
+  const v = views[state.week];
+  const c = v.cur;
+  el.innerHTML = `
+    <div class="halfV-body">
+      <div class="halfV-hero">
+        <div class="hero-num">${c.projects}</div>
+        <div class="hero-label">Projects touched</div>
+        <div class="hero-trend">${refLine(c.projects, v, 'projects')}</div>
+      </div>
+      <div class="halfV-stats">
+        <div class="stat">
+          <div class="stat-num">${c.files}</div>
+          <div class="stat-label">Files touched</div>
+          <div class="stat-trend">${refLine(c.files, v, 'files')}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">${c.versions}</div>
+          <div class="stat-label">Named versions</div>
+          <div class="stat-trend">${refLine(c.versions, v, 'versions')}</div>
+        </div>
+      </div>
+      <div class="halfV-foot">
+        <div style="font-family:var(--ui-mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase;">
+          ${c.posted} comments ${v.refKind === 'lastwk' ? `· last wk ${v.ref.posted}` : ''}
+        </div>
+        <div class="week-range" style="font-size:9px;">${v.refKind === 'lastwk' ? v.short.toUpperCase() + ' · IN PROGRESS' : v.label}</div>
+      </div>
+    </div>`;
+}
+
+function renderQuad() {
+  const el = document.getElementById('quad-content');
+  if (state.mode === 'empty') {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-title">— / —</div>
+        <div class="empty-sub">Not connected</div>
+      </div>`;
+    return;
+  }
+  const v = views[state.week];
+  const c = v.cur;
+  el.innerHTML = `
+    <div class="quad-body">
+      <div class="quad-hero">
+        <div class="hero-num">${c.projects}</div>
+        <div class="hero-label">Projects</div>
+        <div class="hero-trend">${refLine(c.projects, v, 'projects')}</div>
+      </div>
+      <div class="quad-side">
+        <div class="stat">
+          <div class="stat-num">${c.files}</div>
+          <div class="stat-label">Files</div>
+          <div class="stat-trend">${refLine(c.files, v, 'files')}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function applyGrid() {
+  ['dev-full','dev-halfH','dev-halfV','dev-quad'].forEach(id => {
+    const el = document.getElementById(id);
+    if (state.grid) el.classList.add('grid-on');
+    else el.classList.remove('grid-on');
+  });
+}
+
+function updatePrompt() {
+  const v = views[state.week];
+  const c = v.cur;
+  const parts = [];
+  parts.push(`Build a TRMNL private plugin called "Figma Week" for a design agency. Display lives in the office; team WFH on Mon + Fri, so it's only seen Tue/Wed/Thu. That shapes the framing.`);
+  parts.push('');
+  parts.push(`Framing: the plugin shows THIS week live (counters climb as the week progresses). Because Mon + Fri aren't visible, there's no "sad Monday" or "missed Friday peak" problem. Tuesday arrivals see partial data contextualised against LAST WEEK as the reference number — not a 4-week rolling average, because partial-vs-full averaging reads as permanently behind.`);
+  parts.push('');
+  parts.push(`Reference line under each number:`);
+  parts.push(`  • In live mode: "last wk · N" (no arrow — partial weeks aren't judged, they're contextualised)`);
+  parts.push(`  • In retro/rolling mode: "↑ from N · 4w avg" (directional, the week is closed)`);
+  parts.push('');
+  parts.push(`Metrics (from Figma REST API, aggregated this-week-to-date):`);
+  parts.push(`  • Projects touched — hero number`);
+  parts.push(`  • Files touched`);
+  parts.push(`  • New files created this week`);
+  parts.push(`  • Named versions saved`);
+  parts.push(`  • Comments posted this week (count only, demoted to footer — team uses comments as forum threads, not as actionable tasks; ratio/resolved framing doesn't fit)`);
+  parts.push(`  • 5-dot progress pip (M T W T F) on live views so partiality is legible, not hidden`);
+  parts.push('');
+  parts.push(`Four layouts (full 800×480, half-horizontal 800×240, half-vertical 400×480, quadrant 400×240) rendered via TRMNL Liquid templates. Priority as space shrinks:`);
+  parts.push(`  • full: all metrics + progress pip + week-range label`);
+  parts.push(`  • half_horizontal: hero + 3 stats + comments ratio + pip (drop stale alert)`);
+  parts.push(`  • half_vertical: hero + files + versions + comments (drop new files)`);
+  parts.push(`  • quadrant: hero + files only`);
+  parts.push('');
+  parts.push(`Visual: 1-bit black on white (e-ink), heavy condensed sans-serif for numbers, uppercase monospace labels with generous letter-spacing. Let it breathe.`);
+  if (state.mode === 'empty') {
+    parts.push('');
+    parts.push(`Empty / first-run state per layout: "Connect Figma" title + explanation + CTA on full, scaled-down on smaller layouts. Shown when no Figma token is configured.`);
+  }
+  parts.push('');
+  parts.push(`Preview is currently "${v.short}" (${v.label}): projects=${c.projects}, files=${c.files}, new=${c.newFiles}, versions=${c.versions}, comments=${c.resolved}/${c.posted}, stale=${c.stale}. Reference=${v.refKind === 'lastwk' ? 'last week' : '4-week avg'}.`);
+
+  document.getElementById('promptBody').textContent = parts.join('\n');
+}
+
+function renderAll() {
+  renderFull();
+  renderHalfH();
+  renderHalfV();
+  renderQuad();
+  applyGrid();
+  updatePrompt();
+}
+
+// ----- wire up segmented controls -----
+function wireSeg(segId, key) {
+  const seg = document.getElementById(segId);
+  seg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      const v = btn.dataset.v;
+      if (segId === 'gridSeg') state.grid = (v === 'on');
+      else if (segId === 'stateSeg') state.mode = v;
+      else if (segId === 'weekSeg') state.week = v;
+      renderAll();
+    });
+  });
+}
+wireSeg('stateSeg','mode');
+wireSeg('weekSeg','week');
+wireSeg('gridSeg','grid');
+
+// ----- copy button -----
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const txt = document.getElementById('promptBody').textContent;
+  try {
+    await navigator.clipboard.writeText(txt);
+    const b = document.getElementById('copyBtn');
+    b.textContent = 'Copied!';
+    b.classList.add('copied');
+    setTimeout(() => { b.textContent = 'Copy prompt'; b.classList.remove('copied'); }, 1400);
+  } catch (e) {}
+});
+
+renderAll();
+</script>
+
+</body>
+</html>
