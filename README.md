@@ -48,32 +48,43 @@ trmnlp serve                # or ./bin/serve for docker
 Open `http://127.0.0.1:4567/` — all four layouts render in one page, live-reloading
 as you edit `views/*.liquid`.
 
-## When the Figma token arrives
+## Production
 
-1. Fill in `api/.env`:
-   ```
-   FIGMA_TOKEN=<personal access token>
-   FIGMA_TEAM_ID=<numeric id from team URL>
-   ```
-2. Implement `fetchWeeklyData()` in `api/lib/figma.js` — the function is stubbed
-   with the exact REST calls needed in comments. Docs: https://www.figma.com/developers/api
-3. Restart the API. Mock mode auto-disables when `FIGMA_TOKEN` is present.
+Deployed via **Coolify** on the Hetzner VPS — auto-builds on push to `main`.
 
-## Deploy
+- Live URL: `https://figma-week.rgpr.app/api/figma-week`
+- Fonts: `https://figma-week.rgpr.app/Antarctica-*.woff2`
+- TRMNL polling URL points here.
 
-The API is Netlify-ready (`api/netlify/functions/figma-week.js`):
+Coolify app: name `trmnl-rp` → Base Directory `/api` → Dockerfile build pack →
+port 3000 → domain `https://figma-week.rgpr.app` → persistent volume mounted at
+`/app/data` (cache survives redeploys).
+
+Environment variables (set in Coolify):
+- `FIGMA_TOKEN` — Figma personal access token
+- `FIGMA_TEAM_ID` — numeric team ID
+- `PORT` — 3000
+
+### Cache warming
+
+First cold boot does a serial 185-project scan (~1 min) to populate the cache.
+Subsequent polls are instant. Warm manually after a deploy-with-empty-volume:
 
 ```sh
-cd api
-netlify deploy --prod
+ssh root@78.47.187.84 "docker exec \$(docker ps --filter name=x4048goksw4cwss4ckkk0gww -q) node scripts/warm.js"
 ```
 
-Set `FIGMA_TOKEN` and `FIGMA_TEAM_ID` as Netlify environment variables. The
-function is exposed at `/api/figma-week`.
+### Figma token rotation ⚠️
 
-Then update `starter/config.toml` — change the polling URL from `localhost:3000`
-to your Netlify URL, export the plugin via `trmnlp push` (or copy the templates
-into the TRMNL Private Plugin dashboard manually).
+The Figma PAT expires **every 90 days** (Figma no longer issues never-expire tokens).
+
+**Current token issued:** 2026-04-24. **Next rotation due:** ~2026-07-23.
+
+Rotation procedure:
+1. Figma → avatar → Settings → Security → Personal access tokens → Generate new
+2. Scopes: `file_content:read`, `file_metadata:read`, `file_versions:read`, `file_comments:read`, `projects:read`
+3. In Coolify: Site → Environment variables → replace `FIGMA_TOKEN` value → **Redeploy**
+4. Revoke the old token in Figma
 
 ## JSON contract
 
