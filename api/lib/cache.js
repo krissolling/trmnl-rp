@@ -43,3 +43,15 @@ export async function cacheGetOrSet(key, ttlSec, factory) {
   await cacheSet(key, fresh, ttlSec);
   return fresh;
 }
+
+// Reads a cache entry even if it's expired. Used as a stale-while-revalidate
+// fallback so the TRMNL display never goes blank just because Figma is slow.
+export async function cacheGetStale(key) {
+  try {
+    const raw = await readFile(safePath(key), 'utf8');
+    const { data } = JSON.parse(raw);
+    return data;
+  } catch {
+    return null;
+  }
+}

@@ -9,6 +9,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { getPayload } from './lib/handler.js';
+import { warmCache } from './lib/figma.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -109,4 +110,21 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   const mode = process.env.FIGMA_TOKEN && process.env.MOCK !== '1' ? 'LIVE' : 'MOCK';
   console.log(`figma-week api [${mode}] → http://${HOST}:${PORT}/api/figma-week`);
+
+  // Background cache warmer — keeps project file listings fresh so a TRMNL poll
+  // never triggers an in-band 185-project rescan. Runs every 12h. First tick
+  // fires 12h after start (existing cache is good for now); if you want an
+  // immediate warm after a fresh deploy, run `docker exec ... node scripts/warm.js`.
+  if (mode === 'LIVE') {
+    const WARM_INTERVAL_MS = 12 * 60 * 60 * 1000;
+    setInterval(async () => {
+      try {
+        const t0 = Date.now();
+        const n = await warmCache(process.env.FIGMA_TOKEN, process.env.FIGMA_TEAM_ID);
+        console.log(`[warm] refreshed ${n} projects in ${Math.round((Date.now() - t0) / 1000)}s`);
+      } catch (e) {
+        console.error('[warm] failed:', e.message);
+      }
+    }, WARM_INTERVAL_MS);
+  }
 });

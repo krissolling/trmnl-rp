@@ -20,8 +20,12 @@
 import { cacheGetOrSet, cacheGet, cacheSet } from './cache.js';
 
 const FIGMA_API = 'https://api.figma.com/v1';
-const PROJECTS_TTL = 24 * 3600;          // team project list
-const PROJECT_FILES_TTL = 12 * 3600;     // per-project file list
+// Project list / project-files TTLs are very long because the polling endpoint
+// must NEVER trigger a 185-project rescan in-band — Figma rate-limits and the
+// request times out. The background warmer (server.js) refreshes these on a
+// 12h schedule. New files added to a project show up at the next warm cycle.
+const PROJECTS_TTL = 30 * 24 * 3600;     // team project list — 30 days
+const PROJECT_FILES_TTL = 30 * 24 * 3600; // per-project file list — 30 days
 const COMMENTS_TTL = 30 * 60;            // per-file comments
 const VERSIONS_TTL = 365 * 24 * 3600;    // per-file versions (auto-invalidates via key)
 const PROJECT_FILES_DELAY_MS = 300;
@@ -99,16 +103,17 @@ async function getFileVersions(token, fileKey, lastModified) {
         versions: [],
         pagination: {}
       }));
+      const versionsList = (resp.versions || []).map((v) => ({
+        created_at: v.created_at,
+        label: v.label || ''
+      }));
+      // Figma's first page always sets prev_page even when the file has fewer
+      // versions than the default page size (30) — so prev_page can't be used
+      // to detect "we've seen all history". Trust the count instead: a partial
+      // page (under 30) means we have the whole history.
       return {
-        versions: (resp.versions || []).map((v) => ({
-          created_at: v.created_at,
-          label: v.label || ''
-        })),
-        // Figma: prev_page is the URL for OLDER versions, next_page is NEWER.
-        // A file's version history fits on one page iff prev_page is absent
-        // (we always request the most-recent page first, so next_page is
-        // naturally absent). Treat that as "we've seen all versions".
-        has_older_versions: Boolean(resp.pagination?.prev_page)
+        versions: versionsList,
+        full_history: versionsList.length > 0 && versionsList.length < 30
       };
     }
   );
@@ -157,7 +162,7 @@ export async function fetchTwoWeeksData(token, teamId, thisStart, thisEnd, lastS
   //    L2 versions cache auto-invalidates on last_modified change → repeat polls
   //    usually only hit the network for files edited since the last poll.
   const perFile = await mapPool(touched, 4, async (f) => {
-    const [{ versions, has_older_versions }, comments] = await Promise.all([
+    const [{ versions, full_history }, comments] = await Promise.all([
       getFileVersions(token, f.key, f.last_modified),
       getFileComments(token, f.key)
     ]);
@@ -171,12 +176,12 @@ export async function fetchTwoWeeksData(token, teamId, thisStart, thisEnd, lastS
     const commThis = count(comments, (c) => c.created_at, thisStart, thisEnd);
     const commLast = count(comments, (c) => c.created_at, lastStart, lastEnd);
 
-    // New-file heuristic: we have the whole version history (no older pages)
-    // AND the earliest known version is inside the window.
+    // New-file heuristic: a file is "new this week" iff its full version
+    // history fits on one Figma page AND the earliest known version is in the
+    // window. (Mature files have hundreds of versions and never qualify.)
     const earliest = versions[versions.length - 1];
-    const sawAllHistory = !has_older_versions && earliest;
-    const isNewThis = sawAllHistory && tsInRange(earliest.created_at, thisStart, thisEnd);
-    const isNewLast = sawAllHistory && tsInRange(earliest.created_at, lastStart, lastEnd);
+    const isNewThis = full_history && earliest && tsInRange(earliest.created_at, thisStart, thisEnd);
+    const isNewLast = full_history && earliest && tsInRange(earliest.created_at, lastStart, lastEnd);
 
     return {
       project_id: f.project_id,
