@@ -55,3 +55,16 @@ export async function cacheGetStale(key) {
     return null;
   }
 }
+
+// Reads a cache entry and reports whether it's expired. Returns null if
+// the file doesn't exist. Building block for stale-while-revalidate logic.
+export async function cacheReadAny(key) {
+  try {
+    const raw = await readFile(safePath(key), 'utf8');
+    const { expires, data } = JSON.parse(raw);
+    const expired = typeof expires === 'number' && expires < Date.now();
+    return { data, expired };
+  } catch {
+    return null;
+  }
+}
