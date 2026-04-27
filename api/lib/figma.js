@@ -225,8 +225,6 @@ export async function fetchWeeklyData(token, teamId, start, end) {
 
 // Cache warmer — bypasses cacheGetOrSet entirely so it always re-fetches from
 // Figma and overwrites the cached entry. Without this it was a silent no-op.
-import { cacheSet } from './cache.js';
-
 export async function warmCache(token, teamId) {
   const projects = await fetchProjects(token, teamId);
   await cacheSet(`team/${teamId}/projects`, projects, PROJECTS_TTL);
