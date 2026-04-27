@@ -112,12 +112,14 @@ server.listen(PORT, HOST, () => {
   console.log(`figma-week api [${mode}] → http://${HOST}:${PORT}/api/figma-week`);
 
   // Background cache warmer — keeps project file listings fresh so a TRMNL poll
-  // never triggers an in-band 185-project rescan. Runs every 12h. First tick
-  // fires 12h after start (existing cache is good for now); if you want an
-  // immediate warm after a fresh deploy, run `docker exec ... node scripts/warm.js`.
+  // never triggers an in-band 185-project rescan. Fires 60s after startup
+  // (so a redeploy or container restart hydrates within a minute) and then
+  // every 4h. The 4h cadence keeps the office display ≤4h stale on weekday
+  // mornings even if the last deploy was the previous evening.
   if (mode === 'LIVE') {
-    const WARM_INTERVAL_MS = 12 * 60 * 60 * 1000;
-    setInterval(async () => {
+    const WARM_STARTUP_MS = 60 * 1000;
+    const WARM_INTERVAL_MS = 4 * 60 * 60 * 1000;
+    const runWarm = async () => {
       try {
         const t0 = Date.now();
         const n = await warmCache(process.env.FIGMA_TOKEN, process.env.FIGMA_TEAM_ID);
@@ -125,6 +127,8 @@ server.listen(PORT, HOST, () => {
       } catch (e) {
         console.error('[warm] failed:', e.message);
       }
-    }, WARM_INTERVAL_MS);
+    };
+    setTimeout(runWarm, WARM_STARTUP_MS);
+    setInterval(runWarm, WARM_INTERVAL_MS);
   }
 });
