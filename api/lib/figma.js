@@ -74,23 +74,27 @@ const tsInRange = (dateStr, start, end) => {
 // Sanitize last_modified into a filesystem-friendly cache key suffix.
 const lmKey = (lm) => String(lm).replace(/[^0-9TZ-]/g, '_');
 
+async function fetchProjects(token, teamId) {
+  const { projects = [] } = await figmaGet(`/teams/${teamId}/projects`, token);
+  return projects;
+}
+
+async function fetchProjectFiles(token, projectId) {
+  const { files = [] } = await figmaGet(`/projects/${projectId}/files`, token);
+  return files.map((f) => ({
+    key: f.key,
+    name: f.name,
+    last_modified: f.last_modified,
+    project_id: projectId
+  }));
+}
+
 async function getProjects(token, teamId) {
-  return cacheGetOrSet(`team/${teamId}/projects`, PROJECTS_TTL, async () => {
-    const { projects = [] } = await figmaGet(`/teams/${teamId}/projects`, token);
-    return projects;
-  });
+  return cacheGetOrSet(`team/${teamId}/projects`, PROJECTS_TTL, () => fetchProjects(token, teamId));
 }
 
 async function getProjectFiles(token, projectId) {
-  return cacheGetOrSet(`project-files/${projectId}`, PROJECT_FILES_TTL, async () => {
-    const { files = [] } = await figmaGet(`/projects/${projectId}/files`, token);
-    return files.map((f) => ({
-      key: f.key,
-      name: f.name,
-      last_modified: f.last_modified,
-      project_id: projectId
-    }));
-  });
+  return cacheGetOrSet(`project-files/${projectId}`, PROJECT_FILES_TTL, () => fetchProjectFiles(token, projectId));
 }
 
 // L2: per-file versions, keyed by last_modified → self-invalidating.
@@ -219,11 +223,16 @@ export async function fetchWeeklyData(token, teamId, start, end) {
   return thisAgg;
 }
 
-// Cache warmer — used by scripts/warm.js and future scheduled refresh.
+// Cache warmer — bypasses cacheGetOrSet entirely so it always re-fetches from
+// Figma and overwrites the cached entry. Without this it was a silent no-op.
+import { cacheSet } from './cache.js';
+
 export async function warmCache(token, teamId) {
-  const projects = await getProjects(token, teamId);
+  const projects = await fetchProjects(token, teamId);
+  await cacheSet(`team/${teamId}/projects`, projects, PROJECTS_TTL);
   for (const p of projects) {
-    await getProjectFiles(token, p.id);
+    const files = await fetchProjectFiles(token, p.id);
+    await cacheSet(`project-files/${p.id}`, files, PROJECT_FILES_TTL);
     await sleep(PROJECT_FILES_DELAY_MS);
   }
   return projects.length;
